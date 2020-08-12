@@ -41,7 +41,7 @@ python manage.py load_electoral_roll electors.txt places.txt ANSI
 python manage.py compute_statistics
 ```
 
-## Now , something important... How could I run the django appliacation?
+## Now , something important... How could I run the django application?
 
 
 1. Go to the same directory where is the manage.py file
