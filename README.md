@@ -4,13 +4,10 @@ This app contains a custom command that allows to load two files (separated by '
 
 There are some important things you need to know about this command before run it.
 
-```
-You need to have the files that you want to load in the databse in the same directory where is the manage.py file 
-```
+1. You need to have the files that you want to load in the database in the same directory where is the manage.py file (In this case the files in https://www.tse.go.cr/descarga_padron.htm called Padrón Completo )
 
-```
-The encoding of both files must be the same. For example: ANSI (You need to know the encoding of the files)
-```
+2. The encoding of both files must be the same. For example: ANSI (You need to know the encoding of the files)
+
 
 ## Important configuration
 
@@ -18,11 +15,13 @@ There is a file in electoral_roll/management/commands named as load_electoral_ro
 
 ➔ There are two variables named <table_1> and <table_2> these represents the tables that you want to fill with the files, so you need to assign the name of the tables in each variable according to the files. For example:
  ```
-File_1 have the information for the table <car> in the database, so you could do something like : table_1 = car
+File_1 have the information for the table <car> in the database, so you could do something like : 
+table_1 = car
  ```
 ➔ There are two variables named <header_1> and <header_2> these represents the headers of each column in the files. You need to create a list with the name of each column for each file. For example:
  ```
-File_1 have two columns -> name and age, so you could assign <header_1> like : header_1 = ['name','age']
+File_1 have two columns -> name and age, so you could assign <header_1> like : 
+header_1 = ['name','age']
  ```
  ➔ There is a varible named <chunk_size> that represents the rows that you want to get from the files in each loop (Try to keep the same or greater number than the value in this variable)
 
