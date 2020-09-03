@@ -1,4 +1,4 @@
-from django.shortcuts import render,  redirect
+from django.shortcuts import render,  redirect ,HttpResponseRedirect , reverse
 from django.views.generic import CreateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -8,6 +8,12 @@ from .models import Elector
 from .forms import PollingPlaceForm
 from .queries import Queries
 from.statistics import Statistics
+
+from challenge_2.settings import DB_ENGINE
+from electoral_roll.database_manager.mongo_connection import MongoConnection
+
+connection =  MongoConnection(DB_ENGINE)
+
 
 def home(request):
     form = PollingPlaceForm()
@@ -41,8 +47,7 @@ def voting_info(request):
                       elector_information['codigo_electoral__canton'],
                       elector_information['codigo_electoral__distrito']]
 
-            polling_statistics = statistics_object.get_polling_statistics(
-                *params)
+            polling_statistics = statistics_object.get_polling_statistics(*params)
 
     return render(request, template, {'elector_information': elector_information, "statistics": polling_statistics})
 
@@ -74,7 +79,23 @@ class ElectorDeleteView(LoginRequiredMixin,DeleteView):
     model = Elector
     success_url = '/'
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, "Elector eliminado satisfactoriamente")
-        return response
+    
+    def delete(self, request, *args, **kwargs):
+        messages.info(self.request, "Elector eliminado satisfactoriamente")
+
+        if connection.engine == 'mongo':
+            connection.delete_elector(kwargs['pk'])
+            return HttpResponseRedirect(reverse('electoral_roll-home')) 
+
+        else:
+            response = super().delete(request, *args, **kwargs)
+            return response
+
+    def get(self, request, *args, **kwargs):
+
+        if connection.engine == 'mongo':
+            id_card = kwargs['pk']
+            elector = connection.search_by_id_card(id_card)
+            return render(request, 'electoral_roll/elector_confirm_delete.html' , {'object':elector})
+
+        return super().get(request, *args, **kwargs)

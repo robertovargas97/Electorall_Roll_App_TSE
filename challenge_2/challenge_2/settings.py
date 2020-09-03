@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.0/ref/settings/
 """
 
+
 import os
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -75,17 +76,26 @@ WSGI_APPLICATION = 'challenge_2.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
+###############DATABASE TO USE (SETTINGS) ##################
+# If you choose postgre the app will use the configuration of database given in below in DATABASES
+
+MONGO_URI =  'mongodb://localhost'
+# ENGINE -> 1: postgre, 2: mongo
+DB_ENGINE = 'mongo'
+# DB_NAME indicates the name of database to use in mongo
+DB_NAME = 'padron_electoral'
+##########################################################
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'padron_electoral',
+        'NAME': 'Test',  # 'padron_electoral', 'Test'
         'USER': 'postgres',
         'PASSWORD': 'admin',
         'HOST': 'localhost',
         'PORT': '5432',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
@@ -130,3 +140,9 @@ CRISPY_TEMPLATE_PACK = 'bootstrap4'
 LOGIN_REDIRECT_URL = 'electoral_roll-home'
 
 LOGIN_URL = 'login'
+
+
+
+
+
+

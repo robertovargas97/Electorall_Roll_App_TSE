@@ -1,13 +1,11 @@
-import time
-# import psycopg2
-import pandas as pd
 # import memory_profiler
+import time
 import threading
-from io import StringIO
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection
-
+from electoral_roll.models import DistritoElectoral, Elector
+from electoral_roll.database_manager.connection_producer import DBConnectionProducer
+from challenge_2.settings import DB_ENGINE
 
 class Command(BaseCommand):
     help = 'Load two files to a database. Example to use : <file_name_1> <file_name_2> <files_encoding>\n It is necessary to type the file name with its extension : data.txt'
@@ -15,6 +13,8 @@ class Command(BaseCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.threads = list()
+        self.connection = DBConnectionProducer.get_connection(DB_ENGINE)
+
 
     def add_arguments(self, parser):
         parser.add_argument('file_1', type=str,
@@ -28,73 +28,88 @@ class Command(BaseCommand):
 
         # Encoding => ANSI
         encoding = kwargs['files_encoding']
+        
+        # Variables that take the file names from kargs
+        electoral_roll = kwargs['file_1']
+        electoral_district = kwargs['file_2']
 
-        table_1 = 'electoral_roll_elector'
-        file_name_1 = kwargs['file_1']
-        header_names_1 = ["cedula", "codigo_electoral", "relleno", "fecha_caduc",
-                          "junta", "nombre", "primer_apellido", "segundo_apellido"]
+        # Variables used to identify how to handle the rows of the files and where will be inserted the data
+        key_file_1 = "padron"
+        key_file_2 = "distelec"
 
-        table_2 = 'electoral_roll_distritoelectoral'
-        file_name_2 = kwargs['file_2']
-        header_names_2 = ["codigo_electoral",
-                          "provincia", "canton", "distrito"]
+        chunk_size = 600000 
+        print(f"--- Starting the process to clean the database")
+        self.clean_database()
 
-        chunk_size = 250000  # Rows that you want to get from  the files in each loop
+        print(f"--- Starting the process with {self.connection.engine}")
         start_time = time.time()
 
-        self.process_file(file_name_2, encoding,
-                          header_names_2, chunk_size, table_2, 2)
-        self.process_file(file_name_1, encoding,
-                          header_names_1, chunk_size, table_1, 1)
+        self.import_file_to_database(electoral_district, encoding, chunk_size,key_file_2)
+        self.import_file_to_database(electoral_roll, encoding, chunk_size,key_file_1)
 
         for thread in self.threads:
             thread.join()
 
-        print("---The entire process took %s seconds---" %
-              (time.time() - start_time))
+        print(f"--- The entire process took %s seconds with {self.connection.engine} ---" % (time.time() - start_time))
 
     ############################## MY FUNCTIONS TO HANDLE THE FILES ###########################
-
-    def process_file(self, file_name, encoding, header_names, chunk_size, table, file_option):
-        for chunk in pd.read_csv(file_name, chunksize=chunk_size, encoding=encoding, skipinitialspace=True, sep=',', names=header_names):
-            data = StringIO()
-            print("Starting the process...")
-            # If the file has specific columns ,remove blanks just there (to avoid database problems)
-            if file_option == 1:
-                # header_names[5] => nombre
-                # header_names[6] => primer_apellido
-                # header_names[7] => segundo_apellido
-                chunk[header_names[5]] = chunk[header_names[5]].str.strip()
-                chunk[header_names[6]] = chunk[header_names[6]].str.strip()
-                chunk[header_names[7]] = chunk[header_names[7]].str.strip()
-            else:
-                # header_names[3] => distrito
-                chunk[header_names[3]] = chunk[header_names[3]].str.strip()
-
-            chunk.to_csv(data, index=False, encoding=encoding, header=None)
-            data.seek(0)
-            self.execute_thread(data, table, encoding)
-
-###################################################################################################################
+    
+    # @profile
+    def clean_database(self):
+        """
+            Cleans the database to start the process.
+            No matters what is the engine of the database
+        """
+        self.connection.clean_database('electoral_roll')
 
     # @profile
-    def execute_thread(self, data, table, encoding):
-        t = threading.Thread(target=self.copy_to_database, args=(data, table, encoding))
+    def process_file_in_chunks(self,file_name, encoding, chunk_size , option_file):
+        """
+            Processes the file in chunks and yields a chunk according to the chunk_size parameter.
+            No matters what is the engine of the database this method handle each row to each specific type of db
+        """
+        data_list = []
+        count = 0
+
+        with open(file=file_name, mode='r', encoding=encoding) as file:
+            for row in file:
+                row = row.split(',')
+                data_row = self.connection.handle_row_to_insert(row,option_file)
+                data_list.append(data_row)
+
+                if(count == chunk_size):
+                    yield data_list
+                    print(f"{count} elements were yielded")
+                    count = 0
+                    data_list = []
+                
+                count += 1
+            
+        yield data_list
+        print(f"{count} elements were yielded")
+        data_list = []
+
+    # @profile        
+    def import_file_to_database(self,file_name, encoding, chunk_size,option_file):
+        """ Loop through the file and sends a thread to insert the data into the database"""
+        for data in self.process_file_in_chunks(file_name, encoding, chunk_size,option_file):
+            self.execute_thread(data, option_file)
+
+    
+    # @profile
+    def execute_thread(self, data, option_file):
+        """Activate a thread to insert the data into the database"""
+        t = threading.Thread(target=self.insert_data ,args=(data,option_file))
         self.threads.append(t)
         t.start()
 
+    # @profile
+    def insert_data( self, data, option_file):
+        """Performs a bulk insert to the database with each thread"""
+        print(f"--- Starting to insert data with {threading.current_thread().getName()}---")
+        self.connection.bulk_insert(data,option_file)
+
+
+
 ###################################################################################################################
 
-    # @profile
-    def copy_to_database(self, data, table, encoding):
-        # Using the django connection is slower than the psycopg2
-        with connection.cursor() as cursor:
-            try:
-                cursor.copy_from(data, table, sep=",")
-                connection.commit()
-
-            except (Exception) as error:
-                print("Error: %s" % error)
-                return 1
-
-        print("Data inserted in %s" % table)

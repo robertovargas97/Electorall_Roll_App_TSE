@@ -1,6 +1,7 @@
 from .models import Elector, DistritoElectoral, VotantesPorProvincia, VotantesPorCanton
-from django.db.models import Q, Count
-import threading
+from electoral_roll.database_manager.connection_producer import DBConnectionProducer
+from challenge_2.settings import DB_ENGINE
+
 
 
 class Queries:
@@ -11,24 +12,20 @@ class Queries:
         self.elector_first_surname = elector_first_surname.upper()
         self.elector_second_surname = elector_second_surname.upper()
         self.elector_option = elector_option
+        self.connection = DBConnectionProducer.get_connection(DB_ENGINE)
 
-    # Returns the information by searching according to the option that the user chose
+
     def search_polling_information(self):
-        values = ['nombre', 'primer_apellido', 'segundo_apellido', 'cedula', 'codigo_electoral__provincia',
-                  'codigo_electoral__canton', 'codigo_electoral__distrito', 'codigo_electoral', 'fecha_caducidad']
+        """ This method searches the information of the elector according to the user's election
+            No matters what is the engine of the database this method performs the searching well
+        """
+        result = {}
 
         if(self.elector_option == '1'):  # Search by name
-            result = Elector.objects.filter(nombre=self.elector_name,
-                                            primer_apellido=self.elector_first_surname,
-                                            segundo_apellido=self.elector_second_surname).values(*values)
+            result = self.connection.search_by_name(self.elector_name,self.elector_first_surname,self.elector_second_surname)
 
         elif self.elector_option == '2':  # Search by identification
-            result = Elector.objects.filter(cedula=self.elector_identification).values(*values)
-
-        if len(result) > 0:
-            result = result[0]
-
-        else: 
-            result = []
+            result  = self.connection.search_by_id_card(self.elector_identification )
 
         return result
+
